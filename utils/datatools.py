@@ -12,7 +12,14 @@ def getPatientsTable() -> pd.DataFrame:
     return patients
 
 # 환자별 BW & FW 데이터 위치 확인
-def getPatientDataPath(category: str, patient: str) -> list:
+def getPatientDataPath(category: str, patient: str, mode="PREP") -> list:
+    """
+    :param category:
+    :param patient:
+    :param mode: PREP or STRN
+    :return:
+    """
+
     BW = []
     FW = []
 
@@ -24,7 +31,7 @@ def getPatientDataPath(category: str, patient: str) -> list:
     files = os.listdir(targetFolder)
 
     p = re.compile(patient)
-    idxs = list(filter(lambda x: p.search(files[x]) != None, range(len(files))))
+    idxs = list(filter(lambda x: p.search(files[x]) != None and files[x].startswith(mode), range(len(files))))
 
     for idx in idxs:
         f = files[idx]
@@ -37,8 +44,8 @@ def getPatientDataPath(category: str, patient: str) -> list:
 
 
 # 환자별 BW & FW 데이터 가져오기
-def getPatientData(category: str, patient: str) -> pd.DataFrame:
-    BW, FW = getPatientDataPath(category, patient)
+def getPatientData(category: str, patient: str, mode="PREP") -> pd.DataFrame:
+    BW, FW = getPatientDataPath(category, patient, mode)
 
     BWdata = []
     FWdata = []
@@ -53,11 +60,11 @@ def getPatientData(category: str, patient: str) -> pd.DataFrame:
         FWdata.append(df)
     #         print("컬럼 수:", len(df.columns), "위치 포인트 수:", int((len(df.columns)-2)/3))
 
-    df1 = pd.read_csv(FW[0], encoding='utf-8')
-    columns1 = set(x.split('_')[0] for x in list(df1.columns)[2:])
-
-    df2 = pd.read_csv(FW[2], encoding='utf-8')
-    columns2 = set(x.split('_')[0] for x in list(df2.columns)[2:])
+    # df1 = pd.read_csv(FW[0], encoding='utf-8')
+    # columns1 = set(x.split('_')[0] for x in list(df1.columns)[2:])
+    #
+    # df2 = pd.read_csv(FW[2], encoding='utf-8')
+    # columns2 = set(x.split('_')[0] for x in list(df2.columns)[2:])
 
     # print("df1 포인트 수:", len(columns1))
     # print("df2 포인트 수:", len(columns2))
