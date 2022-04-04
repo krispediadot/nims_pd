@@ -58,10 +58,10 @@ def getPatientData(category: str, patient: str) -> pd.DataFrame:
     df2 = pd.read_csv(FW[2], encoding='utf-8')
     columns2 = set(x.split('_')[0] for x in list(df2.columns)[2:])
 
-    print("df1 포인트 수:", len(columns1))
-    print("df2 포인트 수:", len(columns2))
-
-    print("포인트 수 차이나는 이유:", columns2 - columns1)
+    # print("df1 포인트 수:", len(columns1))
+    # print("df2 포인트 수:", len(columns2))
+    #
+    # print("포인트 수 차이나는 이유:", columns2 - columns1)
 
     return BWdata, FWdata
 
