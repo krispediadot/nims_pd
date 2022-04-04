@@ -50,6 +50,7 @@ def getPatientData(category: str, patient: str) -> pd.DataFrame:
 
     for f in FW:
         df = pd.read_csv(f, encoding='utf-8')
+        FWdata.append(df)
     #         print("컬럼 수:", len(df.columns), "위치 포인트 수:", int((len(df.columns)-2)/3))
 
     df1 = pd.read_csv(FW[0], encoding='utf-8')
