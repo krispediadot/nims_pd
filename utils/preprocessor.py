@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
     runPrepData('./FW&BW_Rawdata/PD')
     runPrepData('./FW&BW_Rawdata/Controls')
-    runPrepData('./FW&BW_Rawdata/Controls(추가)')
+#     runPrepData('./FW&BW_Rawdata/Controls(추가)')
 
     generatePatientsTable()
 
