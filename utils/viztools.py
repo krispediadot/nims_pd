@@ -8,7 +8,20 @@ import os
 import pandas as pd
 import numpy as np
 
-def plotPatientLRZDiff(patient, FWdata):
+def getGraphArea(patient, idx, data, shift, TARGET_CATE, SAVEPATH, isSave=True):
+    LH = data.iloc[0:-shift]["LHEE_Z"].values
+    RH = data.iloc[shift:]["RHEE_Z"].values
+    LH_DIFF = data.iloc[0:-shift]["LHEE_Z_DIFF"].values
+    RH_DIFF = data.iloc[shift:]["RHEE_Z_DIFF"].values
+    
+    result = np.array([np.sum(LH), np.sum(RH), np.sum(LH_DIFF), np.sum(RH_DIFF)])
+    
+    if isSave: np.save(os.path.join(os.path.join(SAVEPATH, TARGET_CATE), f"{patient}-FW{idx+1}-AREA.npy"), result)
+    
+    # LH, RH, LH_DIFF, RH_DIFF
+    return result
+
+def plotPatientLRZDiff(patient, FWdata, TARGET_CATE, SAVEPATH, isGetArea=True, isSave=True):
     """ patient's left heel & right heel Z-axis balance visualization """
     for idx, data in enumerate(FWdata):
         
@@ -27,6 +40,9 @@ def plotPatientLRZDiff(patient, FWdata):
         # phase 1 중 LHEE_Z_DIFF > RHEE_Z_DIFF 인 경우를 shift 기준으로 사용
         shift = start[1]
         if data.iloc[shift]["LHEE_Z_DIFF"] < data.iloc[shift]["RHEE_Z_DIFF"]: shift = start[2]
+        
+        # 면적 계산이 필요하다면
+        if isGetArea: getGraphArea(patient, idx, data, shift, TARGET_CATE, SAVEPATH)
 
         sns.lineplot(ax=axes[1][0], data=pd.DataFrame({
                     "LHEE_Z" : data.iloc[0:-shift]["LHEE_Z"].values,
@@ -39,13 +55,42 @@ def plotPatientLRZDiff(patient, FWdata):
                     "RHEE_Z_DIFF" : data.iloc[shift:]["RHEE_Z_DIFF"].values})
                     )
         axes[1][1].set_title("Left-Right HEE Diff sync")
+        
+        fig.savefig(os.path.join(os.path.join(SAVEPATH, TARGET_CATE), f"{patient}-FW{idx+1}.jpg"))
     plt.show()
+    
+    
+# 여러 환자 데이터에 적용
+def plotCategoryLRZDiff(category:str, CONTROL:pd.DataFrame, PD:pd.DataFrame, DATAPATH, SAVEPATH):
+    targetList = PD
+    if category == "Controls": targetList = CONTROL
+    
+    for patient, cntFW in zip(targetList["Patient"], targetList["cntFW"]):
+
+        print("Category:", category)
+        print("Patient :", patient)
+
+        FWdata = []
+
+        for idx in range(1, cntFW+1):
+            if os.path.exists(os.path.join(DATAPATH, f"LHEE_{patient}_FW{idx}.csv")):
+                FWdata.append(pd.read_csv(os.path.join(DATAPATH, f"LHEE_{patient}_FW{idx}.csv")))
+
+        plotPatientLRZDiff(patient, FWdata, category, SAVEPATH)
     
     
 if __name__=="__main__":
     STDPATH = "LHEE 기준 STD 완료한 데이터셋 위치" # 변경필요
     CONTROL_PATH = os.path.join(STDPATH, "Controls")
     PD_PATH = os.path.join(STDPATH, "PD")
+    SAVEPATH =  "VIZ 결과 저장할 위치" # 변경필요
+    
+    SAVE_CONTROL = os.path.join(SAVEPATH, "Controls")
+    SAVE_PD = os.path.join(SAVEPATH, "PD")
+    
+    if os.path.exists(FIGPATH) == False: os.mkdir(FIGPATH)
+    if os.path.exists(FIG_CONTROL) == False: os.mkdir(FIG_CONTROL)
+    if os.path.exists(FIG_PD) == False: os.mkdir(FIG_PD)
     
     patient = "환자 이니셜" # 변경필요
     
@@ -56,3 +101,6 @@ if __name__=="__main__":
     ]
     
     plotPatientLRZDiff(patient, FWdata)
+    
+    TARGET_CATE="Controls"
+    plotCategoryLRZDiff(TARGET_CATE, CONTROL, PD, CONTROL_PATH, FIGPATH)
