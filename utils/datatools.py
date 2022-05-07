@@ -3,79 +3,171 @@ import pandas as pd
 import os
 import re
 
-DATASETPATH = './dataset/'
-DATA_CONTROL = os.path.join(DATASETPATH , 'Controls')
-DATA_PD = os.path.join(DATASETPATH, 'PD')
 
-def getPatientsTable() -> pd.DataFrame:
-    patients = pd.read_csv(os.path.join(DATASETPATH, 'patients.csv'), encoding='utf-8')
-    return patients
-
-# 환자별 BW & FW 데이터 위치 확인
-def getPatientDataPath(category: str, patient: str, mode="PREP") -> list:
-    """
-    :param category:
-    :param patient:
-    :param mode: PREP or STRN
-    :return:
+class DataTools:
     """
 
-    BW = []
-    FW = []
+    PREPROCESSED DATASET EXTRACTOR TOOLS
 
-    if category == "Controls":
-        targetFolder = DATA_CONTROL
-    else:
-        targetFolder = DATA_PD
+    ---------------------------------------------------------------
+    Example 1:
+    t = DataTools()
 
-    files = os.listdir(targetFolder)
+    DATASETPATH = t.get_datasetpath()
+    print("dataset path:", DATASETPATH)
 
-    p = re.compile(patient)
-    idxs = list(filter(lambda x: p.search(files[x]) != None and files[x].startswith(mode), range(len(files))))
+    patients = t.get_patients_table()
+    CONTROL = patients[patients["Category"] == "Controls"]
+    PD = patients[patients["Category"] == "PD"]
 
-    for idx in idxs:
-        f = files[idx]
-        if f.split('_')[2].startswith('FW'):
-            FW.append(os.path.join(targetFolder, f))
-        else:
-            BW.append(os.path.join(targetFolder, f))
+    idx = 0
 
-    return BW, FW
+    category = CONTROL["Category"][idx]
+    patient = CONTROL["Patient"][idx]
+    print("category:", category)
+    print(" patient:", patient)
+
+    fw, bw = t.get_patient_datapath(category, patient)
+    fw_data, bw_data = t.get_patient_fwdw_data(category, patient)
+    ---------------------------------------------------------------
+    
+    ---------------------------------------------------------------
+    Example 2 - custom dataset path: 
+    t = DataTools()
+    t.set_datasetpath(~~CUSTOM DATASET PATH~~)
+
+    DATASETPATH = t.get_datasetpath()
+    print("dataset path:", DATASETPATH)
+
+    patients = t.get_patients_table()
+    CONTROL = patients[patients["Category"] == "Controls"]
+    PD = patients[patients["Category"] == "PD"]
+
+    idx = 0
+
+    category = CONTROL["Category"][idx]
+    patient = CONTROL["Patient"][idx]
+    print("category:", category)
+    print(" patient:", patient)
+
+    fw, bw = t.get_patient_datapath(category, patient)
+    fw_data, bw_data = t.get_patient_fwdw_data(category, patient)
+    ---------------------------------------------------------------
+    """
+
+    def __init__(self):
+
+        # Processed data path
+
+        self.DATASETPATH = "./dataset/"
+        self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
+        self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
+        self.INFO_FILE = "patients.csv"
+
+    def set_datasetpath(self, datasetpath: str):
+        """
+        set custom dataset path
+
+        - datasetpath: dataset path
+        """
+
+        self.DATASETPATH = datasetpath
+        self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
+        self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
+
+    def get_datasetpath(self) -> str:
+        return self.DATASETPATH
+
+    def get_patients_table(self) -> pd.DataFrame:
+        """
+        get patients FW & BW data count info table
+        """
+
+        patients = pd.read_csv(os.path.join(self.DATASETPATH, self.INFO_FILE),
+                               encoding="utf-8")
+
+        return patients
+
+    def get_patient_datapath(self, target_cate: str, target_patient: str, mode="PREP") -> list:
+        """
+        get patients FW & BW data path
+
+        - target_cate: target patient category, "Controls" or "PD"
+        - target_patient: target patient's name, initial
+        - mode: default "PREP"
+        """
+
+        fw = []
+        bw = []
+
+        target_folder = self.DATA_CONTROL
+
+        if target_cate == "PD":
+            target_folder = self.DATA_PD
+
+        files = os.listdir(target_folder)
+
+        p = re.compile(target_patient)
+        idxs = list(filter(lambda x: p.search(files[x]) != None
+                           and files[x].startswith(mode),
+                           range(len(files))))
+
+        for idx in idxs:
+            f = files[idx]
+
+            if f.split('/')[-1].split('_')[2].startswith("FW"):
+                fw.append(os.path.join(target_folder, f))
+            else:
+                bw.append(os.path.join(target_folder, f))
+
+        fw.sort()
+        bw.sort()
+
+        return fw, bw
+
+    def get_patient_fwdw_data(self, target_cate: str, target_patient: str, mode="PREP") -> pd.DataFrame:
+        """
+        get patients FW & BW data
+
+        - target_cate: target patient category, "Controls" or "PD"
+        - target_patient: target patient's name, initial
+        - mode: default "PREP"
+        """
+
+        fw, bw = self.get_patient_datapath(target_cate, target_patient, mode)
+
+        fw_data = []
+        bw_data = []
+
+        for f in fw:
+            df_f = pd.read_csv(f, encoding="utf-8")
+            fw_data.append(df_f)
+
+        for b in bw:
+            df_b = pd.read_csv(b, encoding="utf-8")
+            bw_data.append(df_b)
+
+        return fw_data, bw_data
 
 
-# 환자별 BW & FW 데이터 가져오기
-def getPatientData(category: str, patient: str, mode="PREP") -> pd.DataFrame:
-    BW, FW = getPatientDataPath(category, patient, mode)
+if __name__ == "__main__":
 
-    BWdata = []
-    FWdata = []
+    t = DataTools()
 
-    for b in BW:
-        df = pd.read_csv(b, encoding='utf-8')
-        BWdata.append(df)
-    #         print("컬럼 수:", len(df.columns), "위치 포인트 수:", int((len(df.columns)-2)/3))
+    DATASETPATH = t.get_datasetpath()
+    print("[ * ] dataset path:", DATASETPATH)
 
-    for f in FW:
-        df = pd.read_csv(f, encoding='utf-8')
-        FWdata.append(df)
-    #         print("컬럼 수:", len(df.columns), "위치 포인트 수:", int((len(df.columns)-2)/3))
+    patients = t.get_patients_table()
+    CONTROL = patients[patients["Category"] == "Controls"]
+    PD = patients[patients["Category"] == "PD"]
 
-    # df1 = pd.read_csv(FW[0], encoding='utf-8')
-    # columns1 = set(x.split('_')[0] for x in list(df1.columns)[2:])
-    #
-    # df2 = pd.read_csv(FW[2], encoding='utf-8')
-    # columns2 = set(x.split('_')[0] for x in list(df2.columns)[2:])
+    idx = 0
 
-    # print("df1 포인트 수:", len(columns1))
-    # print("df2 포인트 수:", len(columns2))
-    #
-    # print("포인트 수 차이나는 이유:", columns2 - columns1)
+    category = CONTROL["Category"][idx]
+    patient = CONTROL["Patient"][idx]
+    print("[ * ] category:", category)
+    print("[ * ] patient:", patient)
 
-    return BWdata, FWdata
-
-if __name__=="__main__":
-    CATEGORY = "Controls"
-    PATIENT = "BHY"
-
-    BW, FW = getPatientDataPath(CATEGORY, PATIENT)
-    BWdata, FWdata = getPatientData(CATEGORY, PATIENT)
+    fw, bw = t.get_patient_datapath(category, patient)
+    fw_data, bw_data = t.get_patient_fwdw_data(category, patient)
+    print("[ * ] DONE")
