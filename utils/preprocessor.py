@@ -3,6 +3,11 @@ import glob
 import argparse
 import pandas as pd
 
+if __name__ == "__main__":
+    from datatools import DataTools
+else:
+    from utils.datatools import DataTools
+
 DEBUG = False
 
 
@@ -10,6 +15,9 @@ class Preprocessor:
     """
 
     DAMC PD FW & BW DATASET PREPROCESSOR
+
+    1) preprocessing
+    2) PHASE
 
     ---------------------------------------
     Example 1:
@@ -37,6 +45,8 @@ class Preprocessor:
 
     def __init__(self):
 
+        self.t = DataTools()
+
         # RAW data path
 
         self.RAWDATAPATH = "./FW&BW_Rawdata/"
@@ -49,6 +59,28 @@ class Preprocessor:
         self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
         self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
         self.PREFIX = "PREP_"
+
+        if not os.path.exists(self.DATASETPATH):
+            os.mkdir(self.DATASETPATH)
+        if not os.path.exists(self.DATA_CONTROL):
+            os.mkdir(self.DATA_CONTROL)
+        if not os.path.exists(self.DATA_PD):
+            os.mkdir(self.DATA_PD)
+
+        # Phase data path
+
+        self.PHASEPATH = "./dataset_LHEE_RHEE_Z_PHASE/"
+        self.CONTROL_PATH = os.path.join(self.PHASEPATH, "Controls")
+        self.PD_PATH = os.path.join(self.PHASEPATH, "PD")
+
+        if not os.path.exists(self.PHASEPATH):
+            os.mkdir(self.PHASEPATH)
+        if not os.path.exists(self.CONTROL_PATH):
+            os.mkdir(self.CONTROL_PATH)
+        if not os.path.exists(self.PD_PATH):
+            os.mkdir(self.PD_PATH)
+
+        self.PHASE_ERROR_FILENAME = "error.csv"
 
     def set_rawdatapath(self, rawdatapath: str):
         """
@@ -71,18 +103,35 @@ class Preprocessor:
 
         if not os.path.exists(self.DATASETPATH):
             os.mkdir(self.DATASETPATH)
-
         if not os.path.exists(self.DATA_CONTROL):
             os.mkdir(self.DATA_CONTROL)
-
         if not os.path.exists(self.DATA_PD):
             os.mkdir(self.DATA_PD)
+
+    def set_phasepath(self, phasepath: str):
+        """
+        set custom phase path
+        """
+
+        self.PHASEPATH = phasepath
+        self.CONTROL_PATH = os.path.join(self.PHASEPATH, "Controls")
+        self.PD_PATH = os.path.join(self.PHASEPATH, "PD")
+
+        if os.path.exists(self.PHASEPATH) is False:
+            os.mkdir(self.PHASEPATH)
+        if os.path.exists(self.CONTROL_PATH) is False:
+            os.mkdir(self.CONTROL_PATH)
+        if os.path.exists(self.PD_PATH) is False:
+            os.mkdir(self.PD_PATH)
 
     def get_rawdatapath(self) -> str:
         return self.RAWDATAPATH
 
     def get_datasetpath(self) -> str:
         return self.DATASETPATH
+
+    def get_phasepath(self) -> str:
+        return self.PHASEPATH
 
     def prep_data(self, target_path: str, target_file: str, target_cate: str):
         """
@@ -119,7 +168,8 @@ class Preprocessor:
         dff = dff.iloc[:, target]
         dff.drop(dff.index[1], inplace=True)
 
-        #  4. Rename columns as {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
+        #  4. Rename columns as
+        #     {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
 
         pList = dff.columns
         colList = dff.iloc[0]
@@ -217,16 +267,113 @@ class Preprocessor:
                   encoding="utf-8", index=False)
 
 
+    def generate_phase_info(self, df_data_list: list, target_cate_path: str, filename_prefix: str):
+        """
+        Add and save phase column in a data file
+
+        - df_data_list: target pd.DataFrame list
+        - target_cate_path: target category path
+        - filename_prefix: generated filename with patient name & FW/BW info
+                            ex) PHASE_AAA_BW1.csv
+
+        1. Calculate diff of HEE
+        2. Categorize phase 1/2/3/4
+        """
+
+        for idx, data in enumerate(df_data_list):
+
+            df = data.copy()
+
+            # 1. Calculate diff of HEE
+
+            LHEE_Z_diff = [df.iloc[idx+1]["LHEE_Z"] - df.iloc[idx]["LHEE_Z"]
+                           for idx in range(len(df)-1)]
+
+            RHEE_Z_diff = [df.iloc[idx+1]["RHEE_Z"] - df.iloc[idx]["RHEE_Z"]
+                           for idx in range(len(df)-1)]
+
+            df["LHEE_Z_DIFF"] = [None] + LHEE_Z_diff
+            df["RHEE_Z_DIFF"] = [None] + RHEE_Z_diff
+
+            # 2. Categorize phase 1/2/3/4
+
+            phase = [None]
+
+            for l_diff, r_diff in zip(df["LHEE_Z_DIFF"][1:], df["RHEE_Z_DIFF"][1:]):
+
+                # criteria: l_diff & r_diff
+
+                if l_diff is not None and r_diff is not None:
+                    if l_diff >= 0 and r_diff >= 0: phase.append(1)
+                    if l_diff >= 0 and r_diff < 0: phase.append(2)
+                    if l_diff < 0 and r_diff >= 0: phase.append(3)
+                    if l_diff < 0 and r_diff < 0: phase.append(4)
+                else:
+                    phase.append(None)
+
+            df["PHASE"] = phase
+            df.to_csv(os.path.join(target_cate_path,
+                                   f"{filename_prefix}{idx+1}.csv"), index=False)
+
+    def generate_phase_dataset(self, patients_df: pd.DataFrame, target_cate: str, target_cate_path: str):
+        """
+        Create and Save phase dataset
+
+        - patients_df: target patients info from patients.csv
+        - target_cate: "Controls" or "PD"
+        - target_cate_path: target category path
+        """
+
+        # 1. Create pd.DataFrame for error csv
+
+        dt = pd.DataFrame(columns=["Patient", "Category", "FW_BW"])
+
+        if os.path.exists(os.path.join(self.PHASEPATH, self.PHASE_ERROR_FILENAME)):
+            dt = pd.read_csv(os.path.join(self.PHASEPATH, self.PHASE_ERROR_FILENAME))
+
+        for patient_initial in patients_df["Patient"]:
+
+            # 2. Get each patients FW & BW data list
+
+            fw_data, bw_data = self.t.get_patient_fwbw_data(target_cate, patient_initial)
+
+            # 3. Generate phase
+
+            # FW
+
+            try:
+                self.generate_phase_info(fw_data, target_cate_path,
+                                         f"PHASE_{patient_initial}_FW")
+            except:
+                print(patient_initial+"_FW")
+                dt.loc[len(dt)] = [patient_initial, target_cate, "FW"]
+
+            # BW
+
+            try:
+                self.generate_phase_info(bw_data, target_cate_path,
+                                         f"PHASE_{patient_initial}_BW")
+            except:
+                print(patient_initial+"_BW")
+                dt.loc[len(dt)] = [patient_initial, target_cate, "BW"]
+
+        # 4. Save error result as csv
+
+        dt.to_csv(os.path.join(self.PHASEPATH, self.PHASE_ERROR_FILENAME),
+                  index=False)
+
+
 if __name__ == "__main__":
 
     p = Preprocessor()
 
-    # Options
+    # == Options ==
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="debug mode, use true or t")
     parser.add_argument("--rawdatapath", help="raw data path")
     parser.add_argument("--datasetpath", help="dataset path")
+    parser.add_argument("--phasepath", help="phase path")
     args = parser.parse_args()
 
     if args.debug == "true" or args.debug == "t":
@@ -238,12 +385,36 @@ if __name__ == "__main__":
     if args.datasetpath:
         p.set_datasetpath(args.datasetpath)
 
+    if args.phasepath:
+        p.set_phasepath(args.phasepath)
+
     if not os.path.exists(p.DATASETPATH):
         os.mkdir(p.DATASETPATH)
 
-    # Processor
+#     # == Processor ==
 
-    p.generate_prep_data(p.RAW_CONTROL)
-    p.generate_prep_data(p.RAW_PD)
+#     p.generate_prep_data(p.RAW_CONTROL)
+#     p.generate_prep_data(p.RAW_PD)
 
-    p.generate_patients_fwbw_info_table()
+#     p.generate_patients_fwbw_info_table()
+
+    # == PHASE ==
+
+    p = Preprocessor()
+    p.set_phasepath("./dataset_LHEE_RHEE_Z_PHASE_/")
+
+    SAVEPATH = p.get_phasepath()
+    CONTROL_PATH = os.path.join(SAVEPATH, "Controls")
+    PD_PATH = os.path.join(SAVEPATH, "PD")
+
+    t = DataTools()
+    patients = t.get_patients_table()
+
+    CONTROL = patients[patients["Category"] == "Controls"]
+    PD = patients[patients["Category"] == "PD"]
+
+    print("Controls count:", len(CONTROL))
+    print("PD count:", len(PD))
+
+    p.generate_phase_dataset(CONTROL, "Controls", CONTROL_PATH)
+    p.generate_phase_dataset(PD, "PD", PD_PATH)
