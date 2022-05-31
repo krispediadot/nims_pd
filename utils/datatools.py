@@ -74,6 +74,13 @@ class DataTools:
         self.DATASETPATH = datasetpath
         self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
         self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
+        
+        if os.path.exists(self.DATASETPATH) == False: 
+            os.mkdir(self.DATASETPATH)
+        if os.path.exists(self.DATA_CONTROL) == False: 
+            os.mkdir(self.DATA_CONTROL)
+        if os.path.exists(self.DATA_PD) == False: 
+            os.mkdir(self.DATA_PD)
 
     def get_datasetpath(self) -> str:
         return self.DATASETPATH
@@ -125,7 +132,7 @@ class DataTools:
 
         return fw, bw
 
-    def get_patient_fwdw_data(self, target_cate: str, target_patient: str, mode="PREP") -> pd.DataFrame:
+    def get_patient_fwbw_data(self, target_cate: str, target_patient: str, mode="PREP") -> pd.DataFrame:
         """
         get patients FW & BW data
 

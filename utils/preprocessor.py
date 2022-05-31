@@ -17,7 +17,7 @@ class Preprocessor:
     DAMC PD FW & BW DATASET PREPROCESSOR
 
     1) preprocessing
-    2) PHASE
+    2) phase
 
     ---------------------------------------
     Example 1:
@@ -58,7 +58,7 @@ class Preprocessor:
         self.DATASETPATH = "./dataset/"
         self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
         self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
-        self.PREFIX = "PREP_"
+        self.DATASET_PREFIX = "PREP_"
 
         if not os.path.exists(self.DATASETPATH):
             os.mkdir(self.DATASETPATH)
@@ -81,6 +81,8 @@ class Preprocessor:
             os.mkdir(self.PD_PATH)
 
         self.PHASE_ERROR_FILENAME = "error.csv"
+        
+        
 
     def set_rawdatapath(self, rawdatapath: str):
         """
@@ -99,7 +101,7 @@ class Preprocessor:
         self.DATASETPATH = datasetpath
         self.DATA_CONTROL = os.path.join(self.DATASETPATH, "Controls")
         self.DATA_PD = os.path.join(self.DATASETPATH, "PD")
-        self.PREFIX = "PREP_"
+        self.DATASET_PREFIX = "PREP_"
 
         if not os.path.exists(self.DATASETPATH):
             os.mkdir(self.DATASETPATH)
@@ -142,8 +144,7 @@ class Preprocessor:
         - target_cate: target patient category, "Controls" or "PD"
 
         1. Skip 2 rows from raw data file
-        2. Remove un-recorded columns
-        3. Select positional info columns (unit=mm)
+        2. Select positional info columns (unit=mm)
         4. Rename columns as {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
         5. Save processed file to DATASETPATH
         """
@@ -155,43 +156,32 @@ class Preprocessor:
 
         dff = pd.read_csv(target_path, skiprows=2, encoding="utf-8")
 
-        # 2. Remove un-recorded columns
+        # 2. Select positional info columns (unit=mm)
 
-        while dff[list(dff.columns)[-1]].isna().all():
-            dff.drop(list(dff.columns)[-1], axis=1, inplace=True)
-
-        # 3. Select positional info columns (unit=mm)
-
-        target = [0, 1]
-        target += list(filter(lambda x: list(dff.iloc[1] == "mm")[x],
-                              range(len(list(dff.iloc[1])))))
+        target = [0] + list(filter(lambda x: dff.iloc[1].values[x] == "mm", 
+                                   range(len(dff.columns))))
+        
         dff = dff.iloc[:, target]
         dff.drop(dff.index[1], inplace=True)
 
         #  4. Rename columns as
         #     {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
 
-        pList = dff.columns
-        colList = dff.iloc[0]
+        mark_list = dff.columns.values
+        axis_list = dff.iloc[0].values
 
-        name = None
+        mark_names = [ (idx, mark.split(':')[1]) for idx, mark in enumerate(mark_list)
+                      if (not mark.startswith("Unnamed"))
+                      and (not mark.split(':')[1].startswith("Centre"))]
+        
+        columns = [axis_list[0]]  # add Frame column
+        
+        for idx, mark in mark_names:
+            columns.append(mark + '_' + axis_list[idx])
+            columns.append(mark + '_' + axis_list[idx+1])
+            columns.append(mark + '_' + axis_list[idx+2])
 
-        pNames = []
-        for p in pList:
-            if not p.startswith("Unnamed"):
-                if name is None:
-                    name = p.split(':')[0]
-                pNames.append(p.split(':')[1])
-
-        columns = []
-        columns.append(colList[0])
-        columns.append(colList[1])
-        for idx, col in enumerate(colList[2:]):
-            i = int(idx / 3)
-            eachColName = pNames[i] + '_' + col
-            columns.append(eachColName)
-
-        assert len(columns) == len(list(dff.columns))
+        assert len(columns) == 1+39*3
 
         dff.drop(dff.index[0], inplace=True)
         dff.reset_index(drop=True, inplace=True)
@@ -203,7 +193,7 @@ class Preprocessor:
         # 5. Save processed file to DATASETPATH
 
         dff.to_csv(os.path.join(os.path.join(self.DATASETPATH, target_cate),
-                                self.PREFIX + target_file),
+                                self.DATASET_PREFIX + target_file),
                    encoding="utf-8", index=False)
 
     def generate_prep_data(self, rawdatapath: str):
@@ -391,30 +381,39 @@ if __name__ == "__main__":
     if not os.path.exists(p.DATASETPATH):
         os.mkdir(p.DATASETPATH)
 
-#     # == Processor ==
+    # == Processor ==
 
-#     p.generate_prep_data(p.RAW_CONTROL)
-#     p.generate_prep_data(p.RAW_PD)
+    p.generate_prep_data(p.RAW_CONTROL)
+    p.generate_prep_data(p.RAW_PD)
 
-#     p.generate_patients_fwbw_info_table()
+    p.generate_patients_fwbw_info_table()
 
-    # == PHASE ==
+#     # == PHASE ==
 
-    p = Preprocessor()
-    p.set_phasepath("./dataset_LHEE_RHEE_Z_PHASE_/")
+#     p = Preprocessor()
+#     p.set_phasepath("./dataset_LHEE_RHEE_Z_PHASE_/")
 
-    SAVEPATH = p.get_phasepath()
-    CONTROL_PATH = os.path.join(SAVEPATH, "Controls")
-    PD_PATH = os.path.join(SAVEPATH, "PD")
+#     PHASEPATH = p.get_phasepath()
+#     CONTROL_PATH = os.path.join(PHASEPATH, "Controls")
+#     PD_PATH = os.path.join(PHASEPATH, "PD")
 
-    t = DataTools()
-    patients = t.get_patients_table()
+#     t = DataTools()
+#     patients = t.get_patients_table()
 
-    CONTROL = patients[patients["Category"] == "Controls"]
-    PD = patients[patients["Category"] == "PD"]
+#     CONTROL = patients[patients["Category"] == "Controls"]
+#     PD = patients[patients["Category"] == "PD"]
 
-    print("Controls count:", len(CONTROL))
-    print("PD count:", len(PD))
+#     print("Controls count:", len(CONTROL))
+#     print("PD count:", len(PD))
 
-    p.generate_phase_dataset(CONTROL, "Controls", CONTROL_PATH)
-    p.generate_phase_dataset(PD, "PD", PD_PATH)
+#     p.generate_phase_dataset(CONTROL, "Controls", CONTROL_PATH)
+#     p.generate_phase_dataset(PD, "PD", PD_PATH)
+
+#     # == SHIFT ==
+    
+#     p = Preprocessor()
+#     p.set_shiftpath("./dataset_PHEE_RHEE_Z_PHASE_SHIFT")
+    
+    
+    
+    
