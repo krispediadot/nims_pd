@@ -81,8 +81,13 @@ class Preprocessor:
             os.mkdir(self.PD_PATH)
 
         self.PHASE_ERROR_FILENAME = "error.csv"
-        
-        
+
+        self.MARKERS = ['LFHD', 'RFHD', 'LBHD', 'RBHD', 'C7', 'LSHO', 'RSHO',
+                        'CLAV', 'RBAK', 'LUPA', 'RUPA', 'STRN', 'T10', 'LELB',
+                        'RELB', 'LFRM', 'RFRM', 'LWRA', 'RWRA', 'LWRB', 'RWRB',
+                        'LFIN', 'RFIN', 'LASI', 'RASI', 'LPSI', 'RPSI', 'LTHI',
+                        'RTHI', 'LKNE', 'RKNE', 'LTIB', 'RTIB', 'LANK', 'RANK',
+                        'LTOE', 'RTOE', 'LHEE', 'RHEE']
 
     def set_rawdatapath(self, rawdatapath: str):
         """
@@ -145,6 +150,7 @@ class Preprocessor:
 
         1. Skip 2 rows from raw data file
         2. Select positional info columns (unit=mm)
+        3. Select target 39 markers
         4. Rename columns as {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
         5. Save processed file to DATASETPATH
         """
@@ -152,17 +158,28 @@ class Preprocessor:
         if DEBUG:
             print("[ * ] prep_data:", target_file)
 
+        if target_file == "KMS_FW1.csv" or target_file == "KMS_FW3.csv":  # error files
+            return
+
         # 1. Skip 2 rows from raw data file
 
         dff = pd.read_csv(target_path, skiprows=2, encoding="utf-8")
 
         # 2. Select positional info columns (unit=mm)
 
-        target = [0] + list(filter(lambda x: dff.iloc[1].values[x] == "mm", 
+        target = [0] + list(filter(lambda x: dff.iloc[1].values[x] == "mm",
                                    range(len(dff.columns))))
-        
+
         dff = dff.iloc[:, target]
         dff.drop(dff.index[1], inplace=True)
+
+        # 3. Select target 39 markers
+
+        markers_idx = [i for i, c in enumerate(dff.columns) if c.split(':')[1].split('.')[0] in self.MARKERS]
+        markers_idx = [0] + markers_idx + [i+1 for i in markers_idx] + [i+2 for i in markers_idx]  # markers x,y,z columns
+        markers_idx.sort()
+
+        dff = dff.iloc[:, markers_idx]
 
         #  4. Rename columns as
         #     {MARKER NAME}_X, {MARKER_NAME}_Y, {MAREKR_NAME}_Z
@@ -170,18 +187,17 @@ class Preprocessor:
         mark_list = dff.columns.values
         axis_list = dff.iloc[0].values
 
-        mark_names = [ (idx, mark.split(':')[1]) for idx, mark in enumerate(mark_list)
-                      if (not mark.startswith("Unnamed"))
-                      and (not mark.split(':')[1].startswith("Centre"))]
-        
+        mark_names = [(idx, mark.split(':')[1]) for idx, mark in enumerate(mark_list)
+                      if not mark.startswith("Unnamed")]
+
         columns = [axis_list[0]]  # add Frame column
-        
-        for idx, mark in mark_names:
+
+        for idx, mark in mark_names:  # markers x,y,z columns
             columns.append(mark + '_' + axis_list[idx])
             columns.append(mark + '_' + axis_list[idx+1])
             columns.append(mark + '_' + axis_list[idx+2])
 
-        assert len(columns) == 1+39*3
+        assert len(columns) == 1+39*3  # 1(frame) + 39(MARKERS) * 3(X,Y,Z)
 
         dff.drop(dff.index[0], inplace=True)
         dff.reset_index(drop=True, inplace=True)
